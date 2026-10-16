@@ -24,7 +24,7 @@ def test_report_parity(spark, tmp_path):
     project_root = "/home/victor/repos/reto_cafe_altura"
     script_path = os.path.join(project_root, "salida/script.py")
     input_path = os.path.join(project_root, "datos/lote_1")
-    expected_csv_path = os.path.join(project_root, "legado/salida/rpt_margen_mensual_lote1.csv")
+    expected_csv_path = os.path.join(project_root, "cafe_altura/legado/salida/rpt_margen_mensual_lote1.csv")
     output_temp_folder = str(tmp_path / "output")
 
     # 1. Execute the PySpark script
