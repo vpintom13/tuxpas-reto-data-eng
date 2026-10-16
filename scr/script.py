@@ -16,7 +16,6 @@ builder = (
 
 spark = configure_spark_with_delta_pip(builder).getOrCreate()
 
-###CLAUDE INSERT CODE HERE####
 def run_migration():
     parser = argparse.ArgumentParser(description="Migrate Cafe Altura Monthly Margin Report")
     parser.add_argument("--input_path", required=True, help="Path to the directory containing input CSVs")
