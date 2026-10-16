@@ -1,0 +1,31 @@
+# Entorno virtual
+.venv/
+env/
+
+# Python (Caché)
+__pycache__/
+*.py[cod]
+*.egg-info/
+
+# VS Code
+.vscode/*
+!.vscode/settings.json
+!.vscode/tasks.json
+!.vscode/launch.json
+
+# Spark y Logs locales
+metastoredb/
+derby.log
+metastore_db/
+spark-warehouse/
+*_temp_spark_output/
+
+# IA / Claude Code
+.claude/
+
+# Sistema Operativo
+.DS_Store
+Thumbs.db
+
+# Reto
+cafe_altura/
