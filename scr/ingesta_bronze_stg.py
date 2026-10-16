@@ -6,6 +6,15 @@ from pyspark.sql import SparkSession
 from pyspark.sql import functions as F
 from pyspark.sql.window import Window
 from delta.tables import DeltaTable
+from scr.schemas import (
+    SCHEMA_STG_TIENDAS,
+    SCHEMA_STG_MAPEO_SKU,
+    SCHEMA_STG_PRODUCTOS,
+    SCHEMA_STG_COSTOS_HISTORICO,
+    SCHEMA_STG_TIPO_CAMBIO,
+    SCHEMA_STG_VENTAS_POS,
+    SCHEMA_STG_PEDIDOS_WEB,
+)
 
 os.environ.setdefault("PYSPARK_PYTHON", sys.executable)
 builder = (
@@ -43,26 +52,28 @@ def merge_upsert(df, target_path, pk_cols, update_col="fecha_actualizacion"):
     ).whenNotMatchedInsertAll().execute()
 
 def run_ingestion(input_path, delta_lake_path):
-    # Table configuration: (table_name, is_upsert, pk_columns)
+    # Table configuration: (table_name, is_upsert, pk_columns, schema)
     tables_config = [
-        ("stg.dim_tiendas", False, []),
-        ("stg.mapeo_sku", False, []),
-        ("stg.productos", False, []),
-        ("stg.costos_historico", False, []),
-        ("stg.tipo_cambio", False, []),
-        ("stg.ventas_pos", True, ["tipo_comprobante", "serie", "numero", "item"]),
-        ("stg.pedidos_web", True, ["id_pedido", "linea"]),
+        ("stg.tiendas", False, [], SCHEMA_STG_TIENDAS),
+        ("stg.mapeo_sku", False, [], SCHEMA_STG_MAPEO_SKU),
+        ("stg.productos", False, [], SCHEMA_STG_PRODUCTOS),
+        ("stg.costos_historico", False, [], SCHEMA_STG_COSTOS_HISTORICO),
+        ("stg.tipo_cambio", False, [], SCHEMA_STG_TIPO_CAMBIO),
+        ("stg.ventas_pos", True, ["tipo_comprobante", "serie", "numero", "item"], SCHEMA_STG_VENTAS_POS),
+        ("stg.pedidos_web", True, ["id_pedido", "linea"], SCHEMA_STG_PEDIDOS_WEB),
     ]
 
-    for table_name, is_upsert, pks in tables_config:
+    for table_name, is_upsert, pks, schema in tables_config:
         # The CSVs in the input path are named without the 'stg.' prefix
         csv_name = table_name.replace("stg.", "")
         full_csv_path = f"{input_path}/{csv_name}.csv"
 
         print(f"Ingesting {csv_name} into {table_name}...")
+
         df = (spark.read.option("header", "true")
               .option("delimiter", ",")
               .option("encoding", "UTF-8")
+              .schema(schema)
               .csv(full_csv_path))
 
         target_path = f"{delta_lake_path}/bronze/{table_name}"

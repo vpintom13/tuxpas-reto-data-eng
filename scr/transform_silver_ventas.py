@@ -1,0 +1,100 @@
+import os
+import sys
+import argparse
+from delta import configure_spark_with_delta_pip
+from pyspark.sql import SparkSession
+from pyspark.sql import functions as F
+from pyspark.sql.types import DecimalType
+
+os.environ.setdefault("PYSPARK_PYTHON", sys.executable)
+builder = (
+    SparkSession.builder.appName("cafe-altura-silver").master("local[*]")
+    .config("spark.sql.extensions", "io.delta.sql.DeltaSparkSessionExtension")
+    .config("spark.sql.catalog", "org.apache.spark.sql.delta.catalog.DeltaCatalog")
+)
+spark = configure_spark_with_delta_pip(builder).getOrCreate()
+
+def process_pos_sales(ventas_pos, mapeo_sku, productos):
+    """
+    Processes POS sales: joins with mapping and products, filters and calculates net sales.
+    """
+    return (ventas_pos.alias("v")
+        .join(mapeo_sku.alias("m"), F.upper(mapeo_sku["sku_pos"]) == F.trim(F.upper(ventas_pos["sku"])), "left")
+        .join(productos.alias("p"), F.col("p.sku_erp") == F.col("m.sku_erp"), "left")
+        .filter(
+            (F.col("v.tipo_comprobante").isin("01", "03", "07")) &
+            (F.col("v.estado") != "ANULADO") &
+            (F.col("p.categoria") != "servicio")
+        )
+        .select(
+            F.col("v.id_tienda"),
+            F.trunc(F.col("v.fecha_emision").cast("date"), "month").alias("mes"),
+            F.col("m.sku_erp"),
+            F.col("p.categoria"),
+            F.when(F.col("v.tipo_comprobante") != "07",
+                   F.concat(F.col("v.tipo_comprobante"), F.lit("-"), F.col("v.serie"), F.lit("-"), F.col("v.numero")))
+             .alias("ticket"),
+            F.when(F.col("v.tipo_comprobante") == "07", -F.col("v.cantidad"))
+             .otherwise(F.col("v.cantidad")).alias("unidades"),
+            (F.when(F.col("v.tipo_comprobante") == "07", -F.col("v.importe_total"))
+             .otherwise(F.col("v.importe_total")) / 1.18).cast(DecimalType(12, 2)).alias("venta_sin_igv")
+        ))
+
+def process_web_sales(pedidos_web, mapeo_sku, productos, tipo_cambio):
+    """
+    Processes Web sales: joins with mapping, products, and exchange rate, filters and calculates net sales.
+    """
+    return (pedidos_web.alias("w")
+        .join(mapeo_sku.alias("m"), F.upper(mapeo_sku["sku_web"]) == F.upper(pedidos_web["sku_web"]), "left")
+        .join(productos.alias("p"), F.col("p.sku_erp") == F.col("m.sku_erp"), "left")
+        .join(tipo_cambio.alias("tc"), F.col("tc.fecha") == F.col("w.fecha_pedido").cast("date"), "left")
+        .filter(
+            (F.col("w.estado") == "PAGADO") &
+            (F.col("p.categoria") != "servicio")
+        )
+        .select(
+            F.lit("WEB").alias("id_tienda"),
+            F.trunc(F.col("w.fecha_pedido").cast("date"), "month").alias("mes"),
+            F.col("m.sku_erp"),
+            F.col("p.categoria"),
+            F.col("w.id_pedido").alias("ticket"),
+            F.col("w.cantidad").alias("unidades"),
+            (F.when(F.col("w.moneda") == "USD", F.col("w.importe") * F.col("tc.tc"))
+             .otherwise(F.col("w.importe")) / 1.18).cast(DecimalType(12, 2)).alias("venta_sin_igv")
+        ))
+
+def unify_sales(pos_df, web_df):
+    """
+    Unifies POS and Web sales DataFrames.
+    """
+    return pos_df.unionByName(web_df)
+
+def run_transform(delta_lake_path):
+    bronze_path = f"{delta_lake_path}/bronze"
+
+    # Load Bronze tables
+    ventas_pos = spark.read.format("delta").load(f"{bronze_path}/stg.ventas_pos")
+    pedidos_web = spark.read.format("delta").load(f"{bronze_path}/stg.pedidos_web")
+    mapeo_sku = spark.read.format("delta").load(f"{bronze_path}/stg.mapeo_sku")
+    productos = spark.read.format("delta").load(f"{bronze_path}/stg.productos")
+    tipo_cambio = spark.read.format("delta").load(f"{bronze_path}/stg.tipo_cambio")
+
+    # Process sales
+    pos_sales_df = process_pos_sales(ventas_pos, mapeo_sku, productos)
+    web_sales_df = process_web_sales(pedidos_web, mapeo_sku, productos, tipo_cambio)
+
+    # Unify
+    silver_ventas = unify_sales(pos_sales_df, web_sales_df)
+
+    # Write to Silver
+    silver_path = f"{delta_lake_path}/silver/silver_ventas_unificadas"
+    silver_ventas.write.format("delta").mode("overwrite").save(silver_path)
+
+    spark.stop()
+
+if __name__ == "__main__":
+    parser = argparse.ArgumentParser(description="Silver Layer: Clean and Unify Sales")
+    parser.add_argument("--delta_lake_path", required=True, help="Root path for Delta Lake")
+    args = parser.parse_args()
+
+    run_transform(args.delta_lake_path)
