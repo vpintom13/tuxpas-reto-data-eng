@@ -63,6 +63,17 @@ def process_web_sales(pedidos_web, mapeo_sku, productos, tipo_cambio):
              .otherwise(F.col("w.importe")) / 1.18).cast(DecimalType(12, 2)).alias("venta_sin_igv")
         ))
 
+def integrate_costs(sales_df, costs_df):
+    """
+    Joins sales with current costs (where vigente_hasta IS NULL) and calculates total cost.
+    """
+    return (sales_df.alias("l")
+        .join(costs_df.alias("c"),
+              (F.col("c.sku_erp") == F.col("l.sku_erp")) & (F.col("c.vigente_hasta").isNull()),
+              "left")
+        .withColumn("costo", (F.col("l.unidades") * F.col("c.costo_unitario")).cast(DecimalType(14, 4)))
+        .select("l.*", "costo"))
+
 def unify_sales(pos_df, web_df):
     """
     Unifies POS and Web sales DataFrames.
@@ -78,13 +89,15 @@ def run_transform(delta_lake_path):
     mapeo_sku = spark.read.format("delta").load(f"{bronze_path}/stg.mapeo_sku")
     productos = spark.read.format("delta").load(f"{bronze_path}/stg.productos")
     tipo_cambio = spark.read.format("delta").load(f"{bronze_path}/stg.tipo_cambio")
+    costos_historico = spark.read.format("delta").load(f"{bronze_path}/stg.costos_historico")
 
     # Process sales
     pos_sales_df = process_pos_sales(ventas_pos, mapeo_sku, productos)
     web_sales_df = process_web_sales(pedidos_web, mapeo_sku, productos, tipo_cambio)
 
     # Unify
-    silver_ventas = unify_sales(pos_sales_df, web_sales_df)
+    unified_sales = unify_sales(pos_sales_df, web_sales_df)
+    silver_ventas = integrate_costs(unified_sales, costos_historico)
 
     # Write to Silver
     silver_path = f"{delta_lake_path}/silver/silver_ventas_unificadas"

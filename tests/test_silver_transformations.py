@@ -3,11 +3,18 @@ import pytest
 from datetime import datetime, date
 from pyspark.sql import SparkSession
 from pyspark.sql import functions as F
-from pyspark.sql.types import StructType, StructField, StringType, DecimalType
+from pyspark.sql.types import StructType, StructField, StringType, DecimalType, IntegerType
 from pyspark.testing import assertDataFrameEqual
 from delta import configure_spark_with_delta_pip
-from scr.transform_silver_ventas import process_pos_sales, process_web_sales, unify_sales
-from scr.schemas import SCHEMA_STG_MAPEO_SKU, SCHEMA_STG_PRODUCTOS, SCHEMA_STG_TIPO_CAMBIO, SCHEMA_STG_VENTAS_POS, SCHEMA_STG_PEDIDOS_WEB
+from scr.transform_silver_ventas import process_pos_sales, process_web_sales, unify_sales, integrate_costs
+from scr.schemas import (
+    SCHEMA_STG_MAPEO_SKU,
+    SCHEMA_STG_PRODUCTOS,
+    SCHEMA_STG_TIPO_CAMBIO,
+    SCHEMA_STG_VENTAS_POS,
+    SCHEMA_STG_PEDIDOS_WEB,
+    SCHEMA_STG_COSTOS_HISTORICO
+)
 
 @pytest.fixture(scope="session")
 def spark():
@@ -111,3 +118,41 @@ def test_unify_sales(spark):
     # Verify that columns are correctly preserved
     row = result.collect()[0]
     assert "id" in row and "nombre" in row
+
+def test_integrate_costs(spark):
+    # 1. Setup mock data
+    sales_data = [
+        ("SKU1", 10),  # Should match current cost
+        ("SKU2", 5),   # Should match old cost (be ignored)
+        ("SKU3", 2),   # Should have no match
+    ]
+    sales_schema = StructType([
+        StructField("sku_erp", StringType(), False),
+        StructField("unidades", IntegerType(), False),
+    ])
+    sales_df = spark.createDataFrame(sales_data, schema=sales_schema)
+
+    costs_data = [
+        ("SKU1", date(2023, 1, 1), None, Decimal("10.0")),      # Current cost (Winner)
+        ("SKU1", date(2023, 1, 1), date(2023, 1, 2), Decimal("8.0")), # Old cost
+        ("SKU2", date(2023, 1, 1), date(2023, 1, 2), Decimal("5.0")), # Old cost (No current cost available)
+    ]
+    costs_df = spark.createDataFrame(costs_data, schema=SCHEMA_STG_COSTOS_HISTORICO)
+
+    # 2. Execute integration
+    result = integrate_costs(sales_df, costs_df)
+
+    # 3. Verify
+    # SKU1: 10 units * 10.0 = 100.0
+    # SKU2: 5 units * None = None
+    # SKU3: 2 units * None = None
+    expected_data = [
+        ("SKU1", 10, Decimal("100.0")),
+        ("SKU2", 5, None),
+        ("SKU3", 2, None),
+    ]
+    expected_schema = sales_schema.add("costo", DecimalType(14, 4))
+    expected_df = spark.createDataFrame(expected_data, schema=expected_schema)
+
+    assertDataFrameEqual(result, expected_df)
+
