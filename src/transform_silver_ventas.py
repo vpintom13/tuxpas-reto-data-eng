@@ -50,6 +50,12 @@ def process_web_sales(pedidos_web, mapeo_sku, productos, tipo_cambio):
              .otherwise(F.col("w.importe")) / 1.18).cast(DecimalType(12, 2)).alias("venta_sin_igv")
         ))
 
+def unify_sales(pos_df, web_df):
+    """
+    Unifies POS and Web sales DataFrames.
+    """
+    return pos_df.unionByName(web_df)
+
 def integrate_costs(sales_df, costs_df):
     """
     Joins sales with current costs (where vigente_hasta IS NULL) and calculates total cost.
@@ -60,12 +66,6 @@ def integrate_costs(sales_df, costs_df):
               "left")
         .withColumn("costo", (F.col("l.unidades") * F.col("c.costo_unitario")).cast(DecimalType(14, 4)))
         .select("l.*", "costo"))
-
-def unify_sales(pos_df, web_df):
-    """
-    Unifies POS and Web sales DataFrames.
-    """
-    return pos_df.unionByName(web_df)
 
 def run_transform(spark, delta_lake_path):
     bronze_path = f"{delta_lake_path}/bronze"

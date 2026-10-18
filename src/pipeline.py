@@ -10,7 +10,7 @@ def run_pipeline(spark):
     """
     # Read configurations first
     input_path = config.get_config("INPUT_PATH")
-    delta_path = config.get_config("DELTA_PATH")
+    delta_path = config.get_config("DELTA_LAKE_PATH")
     output_csv_path = config.get_config("OUTPUT_CSV_PATH")
 
     # 1. Bronze Layer: Ingest CSVs to Delta Lake
