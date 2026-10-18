@@ -3,17 +3,7 @@ from pyspark.sql import SparkSession
 from pyspark.sql import functions as F
 from pyspark.sql.types import StructType, StructField, StringType, IntegerType, TimestampType
 from pyspark.testing import assertDataFrameEqual
-from delta import configure_spark_with_delta_pip
 from src.ingesta_bronze_stg import merge_upsert
-
-@pytest.fixture(scope="session")
-def spark():
-    builder = (
-        SparkSession.builder.appName("test-bronze").master("local[*]")
-        .config("spark.sql.extensions", "io.delta.sql.DeltaSparkSessionExtension")
-        .config("spark.sql.catalog.spark_catalog", "org.apache.spark.sql.delta.catalog.DeltaCatalog")
-    )
-    return configure_spark_with_delta_pip(builder).getOrCreate()
 
 @pytest.fixture
 def test_data_schema():

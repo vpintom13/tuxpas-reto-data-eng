@@ -5,7 +5,6 @@ from pyspark.sql import SparkSession
 from pyspark.sql import functions as F
 from pyspark.sql.types import StructType, StructField, StringType, DecimalType, IntegerType
 from pyspark.testing import assertDataFrameEqual
-from delta import configure_spark_with_delta_pip
 from src.transform_silver_ventas import process_pos_sales, process_web_sales, unify_sales, integrate_costs
 from src.schemas import (
     SCHEMA_STG_MAPEO_SKU,
@@ -15,15 +14,6 @@ from src.schemas import (
     SCHEMA_STG_PEDIDOS_WEB,
     SCHEMA_STG_COSTOS_HISTORICO
 )
-
-@pytest.fixture(scope="session")
-def spark():
-    builder = (
-        SparkSession.builder.appName("test-silver").master("local[*]")
-        .config("spark.sql.extensions", "io.delta.sql.DeltaSparkSessionExtension")
-        .config("spark.sql.catalog.spark_catalog", "org.apache.spark.sql.delta.catalog.DeltaCatalog")
-    )
-    return configure_spark_with_delta_pip(builder).getOrCreate()
 
 @pytest.fixture
 def mock_mapeo_sku(spark):
