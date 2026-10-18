@@ -1,18 +1,5 @@
-import os
-import sys
-import argparse
-from delta import configure_spark_with_delta_pip
-from pyspark.sql import SparkSession
 from pyspark.sql import functions as F
 from pyspark.sql.types import DecimalType, IntegerType
-
-os.environ.setdefault("PYSPARK_PYTHON", sys.executable)
-builder = (
-    SparkSession.builder.appName("cafe-altura-gold").master("local[*]")
-    .config("spark.sql.extensions", "io.delta.sql.DeltaSparkSessionExtension")
-    .config("spark.sql.catalog.spark_catalog", "org.apache.spark.sql.delta.catalog.DeltaCatalog")
-)
-spark = configure_spark_with_delta_pip(builder).getOrCreate()
 
 def generate_margin_report(df_sales):
     """
@@ -43,7 +30,7 @@ def generate_margin_report(df_sales):
     )
     return reporte
 
-def run_report(delta_lake_path, output_csv_path):
+def run_report(spark, delta_lake_path, output_csv_path):
     """
     Orchestrator that handles data loading, calling the report logic, and exporting results.
     """
@@ -59,12 +46,3 @@ def run_report(delta_lake_path, output_csv_path):
 
     # Export to CSV
     reporte.write.mode("overwrite").option("header", "true").csv(output_csv_path)
-
-if __name__ == "__main__":
-    parser = argparse.ArgumentParser(description="Gold Layer: Monthly Margin Report")
-    parser.add_argument("--delta_lake_path", required=True, help="Root path for Delta Lake")
-    parser.add_argument("--output_csv_path", required=True, help="Path where final CSV should be saved")
-    args = parser.parse_args()
-
-    run_report(args.delta_lake_path, args.output_csv_path)
-    spark.stop()

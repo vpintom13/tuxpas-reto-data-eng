@@ -1,18 +1,5 @@
-import os
-import sys
-import argparse
-from delta import configure_spark_with_delta_pip
-from pyspark.sql import SparkSession
 from pyspark.sql import functions as F
 from pyspark.sql.types import DecimalType
-
-os.environ.setdefault("PYSPARK_PYTHON", sys.executable)
-builder = (
-    SparkSession.builder.appName("cafe-altura-silver").master("local[*]")
-    .config("spark.sql.extensions", "io.delta.sql.DeltaSparkSessionExtension")
-    .config("spark.sql.catalog", "org.apache.spark.sql.delta.catalog.DeltaCatalog")
-)
-spark = configure_spark_with_delta_pip(builder).getOrCreate()
 
 def process_pos_sales(ventas_pos, mapeo_sku, productos):
     """
@@ -80,7 +67,7 @@ def unify_sales(pos_df, web_df):
     """
     return pos_df.unionByName(web_df)
 
-def run_transform(delta_lake_path):
+def run_transform(spark, delta_lake_path):
     bronze_path = f"{delta_lake_path}/bronze"
 
     # Load Bronze tables
@@ -102,12 +89,3 @@ def run_transform(delta_lake_path):
     # Write to Silver
     silver_path = f"{delta_lake_path}/silver/silver_ventas_unificadas"
     silver_ventas.write.format("delta").mode("overwrite").save(silver_path)
-
-    spark.stop()
-
-if __name__ == "__main__":
-    parser = argparse.ArgumentParser(description="Silver Layer: Clean and Unify Sales")
-    parser.add_argument("--delta_lake_path", required=True, help="Root path for Delta Lake")
-    args = parser.parse_args()
-
-    run_transform(args.delta_lake_path)

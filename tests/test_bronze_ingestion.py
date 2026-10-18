@@ -4,7 +4,7 @@ from pyspark.sql import functions as F
 from pyspark.sql.types import StructType, StructField, StringType, IntegerType, TimestampType
 from pyspark.testing import assertDataFrameEqual
 from delta import configure_spark_with_delta_pip
-from scr.ingesta_bronze_stg import merge_upsert
+from src.ingesta_bronze_stg import merge_upsert
 
 @pytest.fixture(scope="session")
 def spark():
@@ -36,8 +36,8 @@ def test_merge_upsert_initial_deduplication(spark, tmp_path, test_data_schema):
     target_path = str(tmp_path / "test_table")
     pk_cols = ["id"]
 
-    # Execute merge_upsert (Initial Load)
-    merge_upsert(df, target_path, pk_cols)
+    # Execute merge_upsert (Initial Load) - PASS SPARK SESSION
+    merge_upsert(spark, df, target_path, pk_cols)
 
     # Verify
     result = spark.read.format("delta").load(target_path)
@@ -61,7 +61,8 @@ def test_merge_upsert_incremental_complex(spark, tmp_path, test_data_schema):
     target_path = str(tmp_path / "incremental_table")
     pk_cols = ["id"]
 
-    merge_upsert(df_lote1, target_path, pk_cols)
+    # PASS SPARK SESSION
+    merge_upsert(spark, df_lote1, target_path, pk_cols)
 
     # 2. Lote 2: Complex mix
     lote2_data = [
@@ -77,7 +78,8 @@ def test_merge_upsert_incremental_complex(spark, tmp_path, test_data_schema):
     ]
     df_lote2 = spark.createDataFrame(lote2_data, schema=test_data_schema)
 
-    merge_upsert(df_lote2, target_path, pk_cols)
+    # PASS SPARK SESSION
+    merge_upsert(spark, df_lote2, target_path, pk_cols)
 
     # Verification
     result = spark.read.format("delta").load(target_path)

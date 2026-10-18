@@ -6,7 +6,7 @@ from pyspark.sql import functions as F
 from pyspark.sql.types import StructType, StructField, StringType, DecimalType, IntegerType, DateType, LongType
 from pyspark.testing import assertDataFrameEqual
 from delta import configure_spark_with_delta_pip
-from scr.reporte_gold_margen import generate_margin_report
+from src.reporte_gold_margen import generate_margin_report
 
 @pytest.fixture(scope="session")
 def spark():
@@ -16,6 +16,21 @@ def spark():
         .config("spark.sql.catalog.spark_catalog", "org.apache.spark.sql.delta.catalog.DeltaCatalog")
     )
     return configure_spark_with_delta_pip(builder).getOrCreate()
+
+@pytest.fixture
+def report_schema():
+    return StructType([
+        StructField("mes", DateType(), True),
+        StructField("id_tienda", StringType(), True),
+        StructField("categoria", StringType(), True),
+        StructField("unidades", LongType(), True),
+        StructField("tickets", LongType(), True),
+        StructField("unidades_por_ticket", IntegerType(), True),
+        StructField("venta_neta", DecimalType(22, 2), True),
+        StructField("costo", DecimalType(14, 2), True),
+        StructField("margen", DecimalType(23, 2), True),
+        StructField("margen_pct", DecimalType(9, 2), True),
+    ])
 
 @pytest.fixture
 def mock_silver_ventas(spark):
@@ -50,17 +65,14 @@ def mock_silver_ventas(spark):
     ]
     return spark.createDataFrame(data, schema=schema)
 
-def test_generate_margin_report_schema(spark, mock_silver_ventas):
+def test_generate_margin_report_schema(spark, mock_silver_ventas, report_schema):
     result = generate_margin_report(mock_silver_ventas)
 
-    expected_columns = [
-        "mes", "id_tienda", "categoria", "unidades", "tickets",
-        "unidades_por_ticket", "venta_neta", "costo", "margen", "margen_pct"
-    ]
+    expected_columns = [field.name for field in report_schema.fields]
 
     assert result.columns == expected_columns
 
-def test_generate_margin_report_full_aggregation(spark, mock_silver_ventas):
+def test_generate_margin_report_full_aggregation(spark, mock_silver_ventas, report_schema):
     result = generate_margin_report(mock_silver_ventas)
 
     # Expected data mapping all combinations in the mock
@@ -73,20 +85,7 @@ def test_generate_margin_report_full_aggregation(spark, mock_silver_ventas):
         (date(2023, 1, 1), "T3", "Categoria Z", 0, 1, 0, Decimal("0.00"), Decimal("0.00"), Decimal("0.00"), None),
     ]
 
-    expected_schema = StructType([
-        StructField("mes", DateType(), True),
-        StructField("id_tienda", StringType(), True),
-        StructField("categoria", StringType(), True),
-        StructField("unidades", LongType(), True),
-        StructField("tickets", LongType(), True),
-        StructField("unidades_por_ticket", IntegerType(), True),
-        StructField("venta_neta", DecimalType(22, 2), True),
-        StructField("costo", DecimalType(14, 2), True),
-        StructField("margen", DecimalType(23, 2), True),
-        StructField("margen_pct", DecimalType(9, 2), True),
-    ])
-
-    expected_df = spark.createDataFrame(expected_data, schema=expected_schema)
+    expected_df = spark.createDataFrame(expected_data, schema=report_schema)
 
     # Compare results
     assertDataFrameEqual(result, expected_df)

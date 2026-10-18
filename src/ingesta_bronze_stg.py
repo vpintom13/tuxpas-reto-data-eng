@@ -1,12 +1,7 @@
-import os
-import sys
-import argparse
-from delta import configure_spark_with_delta_pip
-from pyspark.sql import SparkSession
 from pyspark.sql import functions as F
 from pyspark.sql.window import Window
 from delta.tables import DeltaTable
-from scr.schemas import (
+from src.schemas import (
     SCHEMA_STG_TIENDAS,
     SCHEMA_STG_MAPEO_SKU,
     SCHEMA_STG_PRODUCTOS,
@@ -16,15 +11,7 @@ from scr.schemas import (
     SCHEMA_STG_PEDIDOS_WEB,
 )
 
-os.environ.setdefault("PYSPARK_PYTHON", sys.executable)
-builder = (
-    SparkSession.builder.appName("cafe-altura-bronze").master("local[*]")
-    .config("spark.sql.extensions", "io.delta.sql.DeltaSparkSessionExtension")
-    .config("spark.sql.catalog.spark_catalog", "org.apache.spark.sql.delta.catalog.DeltaCatalog")
-)
-spark = configure_spark_with_delta_pip(builder).getOrCreate()
-
-def merge_upsert(df, target_path, pk_cols, update_col="fecha_actualizacion"):
+def merge_upsert(spark, df, target_path, pk_cols, update_col="fecha_actualizacion"):
     """
     Performs a MERGE into a Delta table.
     Ensures source data is deduplicated first to prevent 'Multiple rows in source matched' errors.
@@ -51,7 +38,7 @@ def merge_upsert(df, target_path, pk_cols, update_col="fecha_actualizacion"):
         condition=f"source.{update_col} > target.{update_col}"
     ).whenNotMatchedInsertAll().execute()
 
-def run_ingestion(input_path, delta_lake_path):
+def run_ingestion(spark, input_path, delta_lake_path):
     # Table configuration: (table_name, is_upsert, pk_columns, schema)
     tables_config = [
         ("stg.tiendas", False, [], SCHEMA_STG_TIENDAS),
@@ -79,17 +66,7 @@ def run_ingestion(input_path, delta_lake_path):
         target_path = f"{delta_lake_path}/bronze/{table_name}"
 
         if is_upsert:
-            merge_upsert(df, target_path, pks)
+            merge_upsert(spark, df, target_path, pks)
         else:
             # Snapshot: overwrite the table
             df.write.format("delta").mode("overwrite").save(target_path)
-
-    spark.stop()
-
-if __name__ == "__main__":
-    parser = argparse.ArgumentParser(description="Bronze Layer: Ingest CSVs to Delta")
-    parser.add_argument("--input_path", required=True, help="Path to CSV directory")
-    parser.add_argument("--delta_lake_path", required=True, help="Root path for Delta Lake")
-    args = parser.parse_args()
-
-    run_ingestion(args.input_path, args.delta_lake_path)

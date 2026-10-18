@@ -6,8 +6,8 @@ from pyspark.sql import functions as F
 from pyspark.sql.types import StructType, StructField, StringType, DecimalType, IntegerType
 from pyspark.testing import assertDataFrameEqual
 from delta import configure_spark_with_delta_pip
-from scr.transform_silver_ventas import process_pos_sales, process_web_sales, unify_sales, integrate_costs
-from scr.schemas import (
+from src.transform_silver_ventas import process_pos_sales, process_web_sales, unify_sales, integrate_costs
+from src.schemas import (
     SCHEMA_STG_MAPEO_SKU,
     SCHEMA_STG_PRODUCTOS,
     SCHEMA_STG_TIPO_CAMBIO,
