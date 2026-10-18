@@ -1,5 +1,6 @@
 import os
 import sys
+from dotenv import load_dotenv
 from delta import configure_spark_with_delta_pip
 from pyspark.sql import SparkSession
 from src.pipeline import run_pipeline
@@ -17,6 +18,7 @@ def get_spark_session():
     return configure_spark_with_delta_pip(builder).getOrCreate()
 
 if __name__ == "__main__":
+    load_dotenv()
     spark = get_spark_session()
     try:
         run_pipeline(spark)

@@ -1,4 +1,4 @@
-import src.config as config
+import os
 from src.ingesta_bronze_stg import run_ingestion
 from src.transform_silver_ventas import run_transform
 from src.reporte_gold_margen import run_report
@@ -9,9 +9,9 @@ def run_pipeline(spark):
     Executes the flow: Bronze -> Silver -> Gold using the provided SparkSession.
     """
     # Read configurations first
-    input_path = config.get_config("INPUT_PATH")
-    delta_path = config.get_config("DELTA_LAKE_PATH")
-    output_csv_path = config.get_config("OUTPUT_CSV_PATH")
+    input_path = os.getenv("INPUT_PATH")
+    delta_path = os.getenv("DELTA_LAKE_PATH")
+    output_csv_path = os.getenv("OUTPUT_CSV_PATH")
 
     # 1. Bronze Layer: Ingest CSVs to Delta Lake
     run_ingestion(spark, input_path, delta_path)
