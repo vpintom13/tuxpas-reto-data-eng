@@ -36,4 +36,4 @@ delta_lake/*
 !delta_lake/.gitkeep
 
 output/*
-!outpt/.gitkeep
+!output/.gitkeep
