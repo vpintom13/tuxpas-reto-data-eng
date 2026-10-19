@@ -1,3 +1,7 @@
+import os
+import glob
+import shutil
+
 from pyspark.sql import functions as F
 from pyspark.sql.types import DecimalType, IntegerType
 
@@ -45,4 +49,12 @@ def run_report(spark, delta_lake_path, output_csv_path):
     reporte.write.format("delta").mode("overwrite").save(gold_path)
 
     # Export to CSV
-    reporte.write.mode("overwrite").option("header", "true").csv(output_csv_path)
+    # coalesce(1) ensures a single CSV file is created
+    reporte.coalesce(1).write.mode("overwrite").option("header", "true").csv(output_csv_path)
+
+    # Create a copy of the generated file as reporte.csv in the parent directory
+    files = glob.glob(os.path.join(output_csv_path, "*.csv"))
+    if files:
+        part_file = files[0]
+        parent_dir = os.path.dirname(output_csv_path)
+        shutil.copy2(part_file, os.path.join(parent_dir, "reporte.csv"))
