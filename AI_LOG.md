@@ -1,32 +1,33 @@
-```
-### 4.6 `AI_LOG.md`
+# AI Log - Bitácora de Desarrollo Asistido
 
-El uso de asistentes de IA está permitido; lo que interesa es ver con qué criterio se usan. Esta bitácora es obligatoria y debe incluir:
+Este documento registra la interacción con la IA durante el proceso de migración del reporte de margen mensual, detallando la metodología, los prompts clave y las lecciones aprendidas.
 
-1. Las herramientas y los modelos utilizados (Claude, ChatGPT, Copilot, Cursor, agentes, MCP u otros), con su versión cuando se conozca.
-2. El flujo de trabajo: si se usó un solo agente o varios, plan mode o MCP, y cómo se coordinaron.
-3. Entre tres y cinco prompts clave, con lo que se pidió, un resumen de la respuesta y qué se hizo con ella (aceptarla, modificarla o descartarla), y por qué.
-4. Al menos un caso en que la IA se equivocó o propuso algo mejorable, y cómo se detectó y se corrigió.
-5. Una autocrítica: qué parte del trabajo es propia, qué parte se debe a la IA y cómo se validó que el resultado es correcto, más allá de que se ejecute sin errores.
+## Stack Tecnológico de Asistencia
+- **Agente:** Claude Code
+- **Modelo:** Gemma 4
+- **Metodología:** Uso de `Plan Mode` para diseño arquitectónico y validación de pasos antes de la implementación.
+- **Herramientas:** MCP (no requeridos para este flujo).
 
-No hay una cantidad de IA correcta: se valora el criterio con que se usa, no cuánto se usa.
-```
+## Historial de Prompts y Evolución
 
-----------
+| Fase | Prompt Principal | Resultado / Impacto |
+| :--- | :--- | :--- |
+| **1. Migración Inicial** | Migrar script SQL a PySpark (v3.5, Python 3) basándose en `ddl.sql` y archivos CSV, manteniendo la lógica original y parametrizando rutas de entrada/salida. | **Plan de Migración:** Ingesta de 6 CSVs, pipeline de transformaciones (filtros, joins, cálculos) y agregación final para métricas por tienda. |
+| **2. Validación** | Crear tests para comparar el resultado de PySpark vs el esperado usando `pytest` y `pyspark.testing`. | **Framework de Pruebas:** Ejecución del script por subproceso con outputs temporales y comparación automatizada contra archivos de referencia. |
+| **3. Refactorización** | Dividir el script y sus tests en tres capas: Ingesta $\rightarrow$ Transformación $\rightarrow$ Reporte. | **Modularización:** Separación de responsabilidades en 3 scripts independientes, mejorando la mantenibilidad. |
+| **4. Orquestación** | Crear script de pipeline y test de flujo completo que valide resultados vs `/legado` e idempotencia. | **Pipeline End-to-End:** Automatización del flujo completo con validación de integridad de datos. |
 
-- Claude Code (agent) + Gemma 4 (modelo).
-- Solo se uno 1 agente en plan mode. MCP no fueron necesarios
-- Promts usados:
-    1. Migrar el script SQL a pyspark sin realizar alteraciones en la logica, bajo las versiones de pyspark, python y otros paquetes y siguiendo la definicion de las tablas en el archivo ddl.sql, que corresponden a los csv en la carpeta datos/. Input y output path deben ser parametrizables
-    
-        Respuesta: Plan de los cambios a realizar. Migracion de reporte desde procedimiento almacenado SQL a script PySpark. Incluye ingesta de 6 archivos csv, pipeline de transformaaciones (filtrado, joins, calculos) y agregacion al final para generar un csv con las metricas de ventas por tienda.
+## Análisis de Errores y Mejoras (Human-in-the-loop)
 
-    2. Escribir test para comparar el resultado de la migracion a pyspark vs el esperado usando pytest y pyspark.testing
-    
-        Respuesta: Plan de los cambios. Ejecucion de script de migracion de PySpark por subproceso con output a carpeta temporal. Comparacion del csv resultando con el archivo de referefencia
+**Incidencia:** 
+La IA propuso generar la `SparkSession` al inicio de cada script individual, lo que provocaba redundancia de código y problemas de eficiencia.
 
-    3. Refactorizar el script para dividirlo en 3 pasos: Ingesta, transformacion y reporte
-        Respuesta: 3 Scripts con los steps divididos
+**Solución aplicada:**
+Se refactorizó la arquitectura para centralizar la creación de la `SparkSession` en un único entrypoint. Además, para asegurar la compatibilidad con **AWS Glue**, se modificó el diseño para que el pipeline reciba la sesión de Spark como una dependencia externa.
 
-    4. Escribir test para la ingesta de ventas por POS y web con duplicados / actualizados
-        Respuesta: test con datos sinteticos probando el metodo de deduplicacion y merge
+## Conclusión de Colaboración
+La IA fue fundamental en la traducción técnica de T-SQL a PySpark, acelerando la escritura del código base. El valor humano se centró en:
+- Definición de la arquitectura del proyecto.
+- Diseño de la estrategia de despliegue.
+- Revisión crítica de código y definición de casos de prueba complejos.
+- Aseguramiento de la paridad de datos.
